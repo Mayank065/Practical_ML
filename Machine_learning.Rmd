@@ -1,0 +1,125 @@
+---
+title: "Machine Learning Project"
+author: "Mayank"
+date: "March 20, 2016"
+output: html_document
+---
+
+```{r,echo=F}
+options(warn = -1)
+```
+
+```{r}
+library(caret)
+training=read.csv("C:/Users/Lenovo/Downloads/pml-training.csv",header=T)
+testing=read.csv("C:/Users/Lenovo/Downloads/pml-testing.csv",header=T)
+dim(training)
+dim(testing)
+```
+
+training and testing contains the training and testing dataset respectively,as provided for the assignment.
+
+Our first job includes finding all the NA's in the dataset
+
+```{r}
+d=which(is.na(training),arr.ind = T)
+d=as.data.frame(d)
+un=unique(d[[2]])
+un
+
+
+```
+
+
+```{r}
+#These Columns only have  NA's in them, so it is better to remove them before training the model as they are of no use.
+train=training[-un]
+dim(train)
+#removing unwanted variables
+train=train[-c(1:7)]
+dim(train)
+```
+
+Now the next step is to find highly correlated variables in the dataset
+
+```{r}
+#We can only find the correlation among numeric variables.
+co=cor(train[sapply(train,is.numeric)])
+dim(co)
+remove=findCorrelation(co,cutoff = 0.9)#Finding variables with correlation greater than 0.9 and removing them.
+co=as.data.frame(co)
+train2=train[names(co)]
+train2=train2[-remove]
+train2=cbind(train2,training[160])# Including the outcome variable.
+dim(train2)
+```
+
+Now we have comparitively small number of variables to include in the training model.
+
+##Cross Validation
+```{r}
+intrain=createDataPartition(train2$classe,p = 0.8,list=F)
+model_training=train2[intrain,]
+model_testing=train2[-intrain,]
+```
+**Rpart Package in caret**
+
+
+```{r}
+library(rpart)
+model1=train(classe~.,data=model_training,method="rpart")
+library(rattle)
+fancyRpartPlot(model1$finalModel)#A pretty plot
+pre1=predict(model1,newdata=model_testing)#Cross Validating
+sum(diag(table(pre1,model_testing$classe)))/sum(as.numeric(table(pre1,model_testing$classe)))#Accuracy
+```
+This shows a 50% percent missclassification error on the vlaidation dataset.Therefore rpart does not give a good fit. 
+
+**TREE**
+
+```{r}
+library(tree)
+model2=tree(classe~.,data=model_training)
+model2
+```
+This shows numerous number of splits in the tree which gives rise to the number of leaves.  
+Let's see a prettier version for the same
+```{r}
+plot(model2)
+text(model2,pretty=0,cex=0.9)
+pre2=predict(model2,newdata=model_testing,type="class")
+sum(diag(table(pre2,model_testing$classe)))/sum(as.numeric(table(pre2,model_testing$classe)))
+```
+
+**0.71** shows tree is more promising than rpart method as it has 21% less missclassification error as comapred to rpart.
+
+But still it's not good enough to settle, so let's check for other methods.
+
+**NaiveBayes**
+```{r}
+library(e1071)
+model3=naiveBayes(classe~.,data=model_training)
+pre3=predict(model3,newdata=model_testing)
+sum(diag(table(pre3,model_testing$classe)))/sum(as.numeric(table(pre3,model_testing$classe)))
+```
+**0.53** is definitely an improvement over the rpart method but it is way less accurate than tree.
+
+**SVM**
+
+```{r}
+model4=svm(classe~.,data=model_training)
+pre4=predict(model4,newdata=model_testing)
+sum(diag(table(pre4,model_testing$classe)))/sum(as.numeric(table(pre4,model_testing$classe)))
+```
+Finally! a good fit.With a missclassification error of 5% SVM can be considered as the best option.
+
+
+##Conclusion
+
+Considering accuracy as the metric for above models, SVM comes out as the most promising modeling technique for the problem in hand.  
+Now lets predict for the test dataset.
+
+```{r}
+predict(model4,testing)
+```
+These are the classes for the entries in the test dataset.SvM is proved to be the most effective model for training.
